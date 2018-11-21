@@ -1,6 +1,6 @@
 # Dynamic Provisioning of Kubernetes HostPath Volumes
 
-It is a handy tool to have dynamic provisioning of Kubernetes HostPath Volumes in single-node Kubernetes cluster as [kind](https://github.com/kubernetes-sigs/kind).
+A tool to dynamically provision Kubernetes HostPath Volumes in single-node Kubernetes cluster as [kind](https://github.com/kubernetes-sigs/kind).
 
 It is based on [kubernetes-sigs/sig-storage-lib-external-provisioner/hostpath-provisioner](https://github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/tree/master/examples/hostpath-provisioner) example project.
 
