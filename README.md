@@ -15,8 +15,8 @@ helm upgrade --install hostpath-provisioner --namespace kube-system rimusz/hostp
 
 ```bash
 # create a test-pvc and a pod writing to it
-kubectl create -f https://raw.githubusercontent.com/rimusz/hostpath-provisioner/master/test/test-claim.yaml
-kubectl create -f https://raw.githubusercontent.com/rimusz/hostpath-provisioner/master/test/test-pod.yaml
+kubectl create -f https://raw.githubusercontent.com/rimusz/hostpath-provisioner/master/deploy/test-claim.yaml
+kubectl create -f https://raw.githubusercontent.com/rimusz/hostpath-provisioner/master/deploy/test-pod.yaml
 
 # docker exec to kind node
 docker exec -it container_id bash
