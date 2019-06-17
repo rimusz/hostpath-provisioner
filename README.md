@@ -4,6 +4,10 @@ A tool to dynamically provision Kubernetes HostPath Volumes in single-node Kuber
 
 It is based on [kubernetes-sigs/sig-storage-lib-external-provisioner/hostpath-provisioner](https://github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/tree/master/examples/hostpath-provisioner) example project.
 
+## Additional Environment Variables
+
+`PVC_DIRECTORY` - Use this to set a custom directory as your hostpath mount point. If blank, uses default `/mnt/hostpath`
+
 ## TL;DR
 
 ```bash

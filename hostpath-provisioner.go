@@ -49,12 +49,20 @@ type hostPathProvisioner struct {
 // NewHostPathProvisioner creates a new hostpath provisioner
 func NewHostPathProvisioner() controller.Provisioner {
 	nodeName := os.Getenv("NODE_NAME")
+	pvcDirectory := os.Getenv("PVC_DIRECTORY")
 	if nodeName == "" {
 		glog.Fatal("env variable NODE_NAME must be set so that this provisioner can identify itself")
 	}
-	return &hostPathProvisioner{
-		pvDir:    "/mnt/hostpath",
-		identity: nodeName,
+	if pvcDirectory == "" {
+		return &hostPathProvisioner{
+			pvDir:    "/mnt/hostpath",
+			identity: nodeName,
+		}
+	} else {
+		return &hostPathProvisioner{
+			pvDir:    pvcDirectory,
+			identity: nodeName,
+		}
 	}
 }
 
