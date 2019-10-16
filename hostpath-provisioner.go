@@ -26,7 +26,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
@@ -52,8 +52,12 @@ func NewHostPathProvisioner() controller.Provisioner {
 	if nodeName == "" {
 		glog.Fatal("env variable NODE_NAME must be set so that this provisioner can identify itself")
 	}
+	nodeHostPath := os.Getenv("NODE_HOST_PATH")
+	if nodeHostPath == "" {
+		nodeHostPath = "/mnt/hostpath"
+	}
 	return &hostPathProvisioner{
-		pvDir:    "/mnt/hostpath",
+		pvDir:    nodeHostPath,
 		identity: nodeName,
 	}
 }
