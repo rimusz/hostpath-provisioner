@@ -33,9 +33,16 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-const (
-	provisionerName = "hostpath"
-)
+// Fetch provisioner name from environment variable HOSTPATH_PROVISIONER_NAME
+// if not set uses default hostpath name
+func GetProvisionerName() string {
+	provisionerName := os.Getenv("HOSTPATH_PROVISIONER_NAME")
+	if provisionerName == "" {
+		provisionerName = "hostpath"
+	}
+	return provisionerName
+}
+
 
 type hostPathProvisioner struct {
 	// The directory to create PV-backing directories in
@@ -145,6 +152,6 @@ func main() {
 
 	// Start the provision controller which will dynamically provision hostPath
 	// PVs
-	pc := controller.NewProvisionController(clientset, provisionerName, hostPathProvisioner, serverVersion.GitVersion)
+	pc := controller.NewProvisionController(clientset, GetProvisionerName(), hostPathProvisioner, serverVersion.GitVersion)
 	pc.Run(wait.NeverStop)
 }
