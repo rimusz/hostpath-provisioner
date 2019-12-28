@@ -7,6 +7,10 @@ TAG_LATEST=$(IMAGE):latest
 PHONY: all
 all: image push
 
+PHONY: test-image
+test-image:
+	docker build -t hostpath-provisioner -f Dockerfile .
+
 PHONY: image
 image:
 	docker build -t $(TAG_GIT) -f Dockerfile .
