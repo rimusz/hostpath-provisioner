@@ -21,10 +21,9 @@ push:
 	docker push $(TAG_GIT)
 	docker push $(TAG_LATEST)
 
-PHONY: go-mod
-go-mod:
-	go mod init
-
 PHONY: hostpath-provisioner
+hostpath-provisioner: export CGO_ENABLED=0
+hostpath-provisioner: export GO111MODULE=on
+hostpath-provisioner: export GOPROXY=https://gocenter.io
 hostpath-provisioner: $(shell find . -name "*.go")
-	CGO_ENABLED=0 go build -a -ldflags '-extldflags "-static"' -o hostpath-provisioner .
+	go build -a -ldflags '-extldflags "-static"' -o hostpath-provisioner .

@@ -1,4 +1,4 @@
-FROM golang:1.11-alpine AS builder
+FROM golang:1.13-alpine AS builder
 MAINTAINER "<rmocius@gmail..com>"
 
 ARG srcpath="/build/hostpath-provisioner"
@@ -9,7 +9,9 @@ RUN apk --no-cache add git && \
 ADD . "$srcpath"
 
 RUN cd "$srcpath" && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-extldflags "-static"' -o /hostpath-provisioner
+    GO111MODULE=on GOPROXY=https://gocenter.io \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -a -ldflags '-extldflags "-static"' -o /hostpath-provisioner
 
 FROM scratch
 
