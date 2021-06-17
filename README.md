@@ -29,3 +29,7 @@ kubectl delete pvc hostpath-pvc
 # expect the folder to be removed from your host
 ls -alh /mnt/hostpath/pvc-*/
 ```
+
+## Additional Environment Variables
+
+ `NODE_HOST_PATH` - Use this to set a custom directory as your hostpath mount point. If blank, uses default `/mnt/hostpath`
