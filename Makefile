@@ -1,15 +1,15 @@
 #
 IMAGE?=quay.io/rimusz/hostpath-provisioner
 
-TAG_GIT=$(IMAGE):v0.2.3
+TAG_GIT=$(IMAGE):v0.2.4
 TAG_LATEST=$(IMAGE):latest
-
-PHONY: all
-all: image push
 
 PHONY: test-image
 test-image:
 	docker build -t hostpath-provisioner -f Dockerfile .
+
+PHONY: all
+all: image push
 
 PHONY: image
 image:
@@ -24,6 +24,5 @@ push:
 PHONY: hostpath-provisioner
 hostpath-provisioner: export CGO_ENABLED=0
 hostpath-provisioner: export GO111MODULE=on
-hostpath-provisioner: export GOPROXY=https://gocenter.io
 hostpath-provisioner: $(shell find . -name "*.go")
 	go build -a -ldflags '-extldflags "-static"' -o hostpath-provisioner .
