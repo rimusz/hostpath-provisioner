@@ -17,20 +17,20 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"os"
 	"path"
 	"syscall"
 
-	"github.com/golang/glog"
-	"github.com/kubernetes-sigs/sig-storage-lib-external-provisioner/controller"
+	"sigs.k8s.io/sig-storage-lib-external-provisioner/v7/controller"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	klog "k8s.io/klog/v2"
 )
 
 // Fetch provisioner name from environment variable HOSTPATH_PROVISIONER_NAME
@@ -57,7 +57,7 @@ type hostPathProvisioner struct {
 func NewHostPathProvisioner() controller.Provisioner {
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName == "" {
-		glog.Fatal("env variable NODE_NAME must be set so that this provisioner can identify itself")
+		klog.Fatal("env variable NODE_NAME must be set so that this provisioner can identify itself")
 	}
 	nodeHostPath := os.Getenv("NODE_HOST_PATH")
 	if nodeHostPath == "" {
@@ -72,11 +72,11 @@ func NewHostPathProvisioner() controller.Provisioner {
 var _ controller.Provisioner = &hostPathProvisioner{}
 
 // Provision creates a storage asset and returns a PV object representing it.
-func (p *hostPathProvisioner) Provision(options controller.VolumeOptions) (*v1.PersistentVolume, error) {
+func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.ProvisionOptions) (*v1.PersistentVolume, controller.ProvisioningState, error) {
 	path := path.Join(p.pvDir, options.PVName)
 
 	if err := os.MkdirAll(path, 0777); err != nil {
-		return nil, err
+		return nil, controller.ProvisioningFinished, err
 	}
 
 	pv := &v1.PersistentVolume{
@@ -87,7 +87,7 @@ func (p *hostPathProvisioner) Provision(options controller.VolumeOptions) (*v1.P
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
-			PersistentVolumeReclaimPolicy: options.PersistentVolumeReclaimPolicy,
+			PersistentVolumeReclaimPolicy: *options.StorageClass.ReclaimPolicy,
 			AccessModes:                   options.PVC.Spec.AccessModes,
 			Capacity: v1.ResourceList{
 				v1.ResourceName(v1.ResourceStorage): options.PVC.Spec.Resources.Requests[v1.ResourceName(v1.ResourceStorage)],
@@ -100,12 +100,12 @@ func (p *hostPathProvisioner) Provision(options controller.VolumeOptions) (*v1.P
 		},
 	}
 
-	return pv, nil
+	return pv, controller.ProvisioningFinished, nil
 }
 
 // Delete removes the storage asset that was created by Provision represented
 // by the given PV.
-func (p *hostPathProvisioner) Delete(volume *v1.PersistentVolume) error {
+func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentVolume) error {
 	ann, ok := volume.Annotations["hostPathProvisionerIdentity"]
 	if !ok {
 		return errors.New("identity annotation not found on PV")
@@ -132,18 +132,11 @@ func main() {
 	// to use to communicate with Kubernetes
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		glog.Fatalf("Failed to create config: %v", err)
+		klog.Fatalf("Failed to create config: %v", err)
 	}
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		glog.Fatalf("Failed to create client: %v", err)
-	}
-
-	// The controller needs to know what the server version is because out-of-tree
-	// provisioners aren't officially supported until 1.5
-	serverVersion, err := clientset.Discovery().ServerVersion()
-	if err != nil {
-		glog.Fatalf("Error getting server version: %v", err)
+		klog.Fatalf("Failed to create client: %v", err)
 	}
 
 	// Create the provisioner: it implements the Provisioner interface expected by
@@ -152,6 +145,8 @@ func main() {
 
 	// Start the provision controller which will dynamically provision hostPath
 	// PVs
-	pc := controller.NewProvisionController(clientset, GetProvisionerName(), hostPathProvisioner, serverVersion.GitVersion)
-	pc.Run(wait.NeverStop)
+	pc := controller.NewProvisionController(clientset, GetProvisionerName(), hostPathProvisioner)
+
+	// Never stops.
+	pc.Run(context.Background())
 }

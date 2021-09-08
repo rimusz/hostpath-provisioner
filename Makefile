@@ -1,7 +1,7 @@
 #
 IMAGE?=quay.io/rimusz/hostpath-provisioner
 
-TAG_GIT=$(IMAGE):v0.2.4
+TAG_GIT=$(IMAGE):v0.2.5
 TAG_LATEST=$(IMAGE):latest
 
 PHONY: test-image
