@@ -1,0 +1,16 @@
+name: ECR Build Caller Workflow
+on:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  call-workflow-in-ecr-template:
+    uses: arkcase/github-action-templates/.github/workflows/ecr-publish.yml@main
+    secrets:
+      ECR_AWS_REGION: ${{ secrets.ECR_AWS_REGION }}
+      ECR_AWS_ORG_ID: ${{ secrets.ECR_AWS_ORG_ID }}
+      ECR_AWS_ACCESS_KEY: ${{ secrets.ECR_AWS_ACCESS_KEY }}
+      ECR_AWS_ACCOUNT_ID: ${{ secrets.ECR_AWS_ACCOUNT_ID }}
+      ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
