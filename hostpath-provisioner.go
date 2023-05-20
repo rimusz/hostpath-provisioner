@@ -67,14 +67,14 @@ func NewHostPathProvisioner() controller.Provisioner {
 	if nodeHostPath == "" {
 		nodeHostPath = "/mnt/hostpath"
 	}
-	hostPathAnnotation := os.Getenv("NODE_HOST_PATH_ANNOTATION")
+	nodeHostPathAnnotation := os.Getenv("NODE_HOST_PATH_ANNOTATION")
 	if nodeHostPathAnnotation == "" {
 		nodeHostPathAnnotation = "hostPath"
 	}
 	return &hostPathProvisioner{
 		pvDir:    nodeHostPath,
 		identity: nodeName,
-		hostPathAnnotation: hostPathAnnotation,
+		hostPathAnnotation: nodeHostPathAnnotation,
 	}
 }
 
