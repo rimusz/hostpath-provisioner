@@ -111,7 +111,6 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				HostPath: &v1.HostPathVolumeSource{
 					Path: path,
-					Type: "DirectoryOrCreate",
 				},
 			},
 		},
