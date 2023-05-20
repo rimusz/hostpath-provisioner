@@ -58,6 +58,9 @@ type hostPathProvisioner struct {
 	// The annotation name to look for within PVCs when a specific location is
 	// desired within the path tree
 	hostPathAnnotation string
+
+	// The directory at which the created volumes will be accessible to the pod
+	hpMount string
 }
 
 // NewHostPathProvisioner creates a new hostpath provisioner
@@ -74,10 +77,18 @@ func NewHostPathProvisioner() controller.Provisioner {
 	if nodeHostPathAnnotation == "" {
 		nodeHostPathAnnotation = "hostPath"
 	}
+	nodeHostPathMount := os.Getenv("NODE_HOST_PATH_MOUNT")
+	if nodeHostPathMount == "" {
+		nodeHostPathMount = "/hostPath"
+	} else if _, err := filepath.Abs(nodeHostPathMount); err == nil {
+		fmt.Printf("The given NODE_HOST_PATH_MOUNT value [%s] must be an absolute path", nodeHostPathMount)
+		nodeHostPathMount = "/hostPath"
+	}
 	return &hostPathProvisioner{
 		pvDir:    nodeHostPath,
 		identity: nodeName,
 		hostPathAnnotation: nodeHostPathAnnotation,
+		hpMount:  nodeHostPathMount,
 	}
 }
 
@@ -105,11 +116,11 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 			hostPath = ann + sep + options.PVC.Name
 		}
 	}
-	path := path.Join(p.pvDir, hostPath)
+	hostPath = path.Join(p.pvDir, hostPath)
 	volumeName := options.PVName
 
-	fmt.Printf("Provisioning volume %s from PVC %s/%s at path [%s]\n", volumeName, options.PVC.Namespace, options.PVC.Name, path)
-	if err := os.MkdirAll(path, 0777); err != nil {
+	fmt.Printf("Provisioning volume %s from PVC %s/%s at path [%s]\n", volumeName, options.PVC.Namespace, options.PVC.Name, hostPath)
+	if err := os.MkdirAll(path.Join(p.hpMount, hostPath), 0777); err != nil {
 		fmt.Printf("\tProvisioning failed: %s\n", err)
 		return nil, controller.ProvisioningFinished, err
 	}
@@ -129,7 +140,7 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 			},
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				HostPath: &v1.HostPathVolumeSource{
-					Path: path,
+					Path: hostPath,
 				},
 			},
 		},
@@ -150,11 +161,16 @@ func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 		return &controller.IgnoredError{Reason: "identity annotation on PV does not match ours"}
 	}
 
-	path := volume.Spec.PersistentVolumeSource.HostPath.Path
-	fmt.Printf("Removing the contents for volume %s at path [%s]\n", volume.Name, path)
-	if err := os.RemoveAll(path); err != nil {
-		fmt.Printf("\tFailed to remove the contents: %s\n", err)
-		return err
+	hostPath := volume.Spec.PersistentVolumeSource.HostPath.Path
+	fmt.Printf("Removing the contents for volume %s at path [%s]\n", volume.Name, hostPath)
+	if relPath, e := filepath.Rel(p.pvDir, hostPath); e == nil {
+		if err := os.RemoveAll(path.Join(p.hpMount, relPath)); err != nil {
+			fmt.Printf("\tFailed to remove the contents: %s\n", err)
+			return err
+		}
+	} else {
+		fmt.Printf("\tFailed to relativize the path: %s\n", e)
+		return e
 	}
 
 	return nil
