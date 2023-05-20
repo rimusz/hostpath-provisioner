@@ -51,6 +51,10 @@ type hostPathProvisioner struct {
 	// Identity of this hostPathProvisioner, set to node's name. Used to identify
 	// "this" provisioner's PVs.
 	identity string
+
+	// The annotation name to look for within PVCs when a specific location is
+	// desired within the path tree
+	hostPathAnnotation string
 }
 
 // NewHostPathProvisioner creates a new hostpath provisioner
@@ -63,9 +67,14 @@ func NewHostPathProvisioner() controller.Provisioner {
 	if nodeHostPath == "" {
 		nodeHostPath = "/mnt/hostpath"
 	}
+	hostPathAnnotation := os.Getenv("NODE_HOST_PATH_ANNOTATION")
+	if nodeHostPathAnnotation == "" {
+		nodeHostPathAnnotation = "hostPath"
+	}
 	return &hostPathProvisioner{
 		pvDir:    nodeHostPath,
 		identity: nodeName,
+		hostPathAnnotation: hostPathAnnotation,
 	}
 }
 
@@ -73,7 +82,15 @@ var _ controller.Provisioner = &hostPathProvisioner{}
 
 // Provision creates a storage asset and returns a PV object representing it.
 func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.ProvisionOptions) (*v1.PersistentVolume, controller.ProvisioningState, error) {
-	path := path.Join(p.pvDir, options.PVName)
+	hostPath := options.PVName
+
+	// Allow the use of an annotation to request a specific location within the
+	// directory hierarchy.
+	ann, ok := options.PVC.Annotations[p.hostPathAnnotation]
+	if ok {
+		hostPath = ann
+	}
+	path := path.Join(p.pvDir, hostPath)
 
 	if err := os.MkdirAll(path, 0777); err != nil {
 		return nil, controller.ProvisioningFinished, err
@@ -84,6 +101,7 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 			Name: options.PVName,
 			Annotations: map[string]string{
 				"hostPathProvisionerIdentity": p.identity,
+				"hostPathProvisionerPath": path,
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
@@ -114,7 +132,14 @@ func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 		return &controller.IgnoredError{Reason: "identity annotation on PV does not match ours"}
 	}
 
-	path := path.Join(p.pvDir, volume.Name)
+	// This annotation is used to store the path where the volume was created
+	path, ok := volume.Annotations["hostPathProvisionerPath"]
+	if !ok {
+		// If the annotation isn't there, this may be a legacy volume so we use
+		// the default method for computing its location
+		path := path.Join(p.pvDir, volume.Name)
+	}
+
 	if err := os.RemoveAll(path); err != nil {
 		return err
 	}
