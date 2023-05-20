@@ -100,7 +100,6 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 			Name: options.PVName,
 			Annotations: map[string]string{
 				"hostPathProvisionerIdentity": p.identity,
-				"hostPathProvisionerPath": path,
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
@@ -112,6 +111,7 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				HostPath: &v1.HostPathVolumeSource{
 					Path: path,
+					Type: "DirectoryOrCreate",
 				},
 			},
 		},
@@ -121,7 +121,7 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 }
 
 // Delete removes the storage asset that was created by Provision represented
-// by the given PV.
+// by the given PV. The path is read directly from the PV object
 func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentVolume) error {
 	ann, ok := volume.Annotations["hostPathProvisionerIdentity"]
 	if !ok {
@@ -131,14 +131,7 @@ func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 		return &controller.IgnoredError{Reason: "identity annotation on PV does not match ours"}
 	}
 
-	// This annotation is used to store the path where the volume was created
-	if path, ok := volume.Annotations["hostPathProvisionerPath"]; ok {
-		// If the annotation isn't there, this may be a legacy volume so we use
-		// the default method for computing its location
-		path := path.Join(p.pvDir, volume.Name)
-	}
-
-	if err := os.RemoveAll(path); err != nil {
+	if err := os.RemoveAll(volume.Spec.PersistentVolumeSource.HostPath.Path); err != nil {
 		return err
 	}
 
