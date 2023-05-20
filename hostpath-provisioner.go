@@ -22,10 +22,9 @@ import (
 	"flag"
 	"os"
 	"path"
-	"syscall"
 	filepath "path/filepath"
 	"strings"
-	"fmt"
+	"syscall"
 
 	"sigs.k8s.io/sig-storage-lib-external-provisioner/v7/controller"
 
@@ -45,7 +44,6 @@ func GetProvisionerName() string {
 	}
 	return provisionerName
 }
-
 
 type hostPathProvisioner struct {
 	// The directory to create PV-backing directories in
@@ -68,10 +66,12 @@ func NewHostPathProvisioner() controller.Provisioner {
 	nodeName := os.Getenv("NODE_NAME")
 	if nodeName == "" {
 		klog.Fatal("env variable NODE_NAME must be set so that this provisioner can identify itself")
+		// If no nodename is given, use a default value
+		nodeName = "hostpath-provisioner"
 	}
 	nodeHostPath := os.Getenv("NODE_HOST_PATH")
 	if nodeHostPath == "" {
-		nodeHostPath = "/mnt/hostpath"
+		nodeHostPath = "/hostPath"
 	}
 	nodeHostPathAnnotation := os.Getenv("NODE_HOST_PATH_ANNOTATION")
 	if nodeHostPathAnnotation == "" {
@@ -80,15 +80,15 @@ func NewHostPathProvisioner() controller.Provisioner {
 	nodeHostPathMount := os.Getenv("NODE_HOST_PATH_MOUNT")
 	if nodeHostPathMount == "" {
 		nodeHostPathMount = "/hostPath"
-	} else if _, err := filepath.Abs(nodeHostPathMount); err == nil {
-		fmt.Printf("The given NODE_HOST_PATH_MOUNT value [%s] must be an absolute path", nodeHostPathMount)
+	} else if !filepath.IsAbs(nodeHostPathMount) {
+		klog.Warningf("The given NODE_HOST_PATH_MOUNT value [%s] must be an absolute path", nodeHostPathMount)
 		nodeHostPathMount = "/hostPath"
 	}
 	return &hostPathProvisioner{
-		pvDir:    nodeHostPath,
-		identity: nodeName,
+		pvDir:              nodeHostPath,
+		identity:           nodeName,
 		hostPathAnnotation: nodeHostPathAnnotation,
-		hpMount:  nodeHostPathMount,
+		hpMount:            nodeHostPathMount,
 	}
 }
 
@@ -119,12 +119,13 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 	hostPath = path.Join(p.pvDir, hostPath)
 	volumeName := options.PVName
 
-	fmt.Printf("Provisioning volume %s from PVC %s/%s at path [%s]\n", volumeName, options.PVC.Namespace, options.PVC.Name, hostPath)
+	klog.Infof("Provisioning volume %s from PVC %s/%s at host path [%s]", volumeName, options.PVC.Namespace, options.PVC.Name, hostPath)
 	if err := os.MkdirAll(path.Join(p.hpMount, hostPath), 0777); err != nil {
-		fmt.Printf("\tProvisioning failed: %s\n", err)
+		klog.Fatalf("\tProvisioning failed: %s", err)
 		return nil, controller.ProvisioningFinished, err
 	}
 
+	volumeType := v1.HostPathDirectoryOrCreate
 	pv := &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: volumeName,
@@ -141,6 +142,7 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 			PersistentVolumeSource: v1.PersistentVolumeSource{
 				HostPath: &v1.HostPathVolumeSource{
 					Path: hostPath,
+					Type: &volumeType,
 				},
 			},
 		},
@@ -162,15 +164,15 @@ func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 	}
 
 	hostPath := volume.Spec.PersistentVolumeSource.HostPath.Path
-	fmt.Printf("Removing the contents for volume %s at path [%s]\n", volume.Name, hostPath)
-	if relPath, e := filepath.Rel(p.pvDir, hostPath); e == nil {
-		if err := os.RemoveAll(path.Join(p.hpMount, relPath)); err != nil {
-			fmt.Printf("\tFailed to remove the contents: %s\n", err)
-			return err
-		}
-	} else {
-		fmt.Printf("\tFailed to relativize the path: %s\n", e)
-		return e
+	klog.Infof("Removing the contents for volume %s at host path [%s]", volume.Name, hostPath)
+	relPath, err := filepath.Rel(p.pvDir, hostPath)
+	if err != nil {
+		klog.Fatalf("\tFailed to relativize the host path: %s", err)
+		return err
+	}
+	if err := os.RemoveAll(path.Join(p.hpMount, relPath)); err != nil {
+		klog.Fatalf("\tFailed to remove the contents: %s", err)
+		return err
 	}
 
 	return nil
