@@ -1,19 +1,32 @@
-FROM golang:1.16-alpine AS builder
+ARG BUILDER_IMAGE="golang"
+ARG BUILDER_VER="1.20.4-alpine3.18"
+ARG ARCH="amd64"
+ARG OS="linux"
+ARG VER="0.3.0"
 
-ARG srcpath="/build/hostpath-provisioner"
+FROM "${BUILDER_IMAGE}:${BUILDER_VER}" AS builder
+
+ARG SRCPATH="/build/hostpath-provisioner"
 
 RUN apk --no-cache add git && \
-    mkdir -p "$srcpath"
+    mkdir -p "${SRCPATH}"
 
-ADD . "$srcpath"
+ADD . "${SRCPATH}"
 
-RUN cd "$srcpath" && \
+RUN cd "${SRCPATH}" && \
     GO111MODULE=on \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -a -ldflags '-extldflags "-static"' -o /hostpath-provisioner
 
 FROM scratch
 
+ARG VER
+
+LABEL ORG="ArkCase LLC" \
+      MAINTAINER="Armedia Devops Team <devops@armedia.com>" \
+      APP="ArkCase Core" \
+      VERSION="${VER}"
+
 COPY --from=builder /hostpath-provisioner /hostpath-provisioner
 
-CMD ["/hostpath-provisioner"]
+CMD [ "/hostpath-provisioner" ]
