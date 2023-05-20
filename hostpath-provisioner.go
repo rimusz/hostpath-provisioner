@@ -23,6 +23,9 @@ import (
 	"os"
 	"path"
 	"syscall"
+	filepath "path/filepath"
+	"strings"
+	"fmt"
 
 	"sigs.k8s.io/sig-storage-lib-external-provisioner/v7/controller"
 
@@ -85,19 +88,35 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 	hostPath := options.PVName
 
 	// Allow the use of an annotation to request a specific location within the
-	// directory hierarchy.
+	// directory hierarchy. If the annotation isn't present, the original behavior
+	// is preserved.
 	if ann, ok := options.PVC.Annotations[p.hostPathAnnotation]; ok {
-		hostPath = ann
+		// Cleanup the annotation value to remove leading slash (no abs path allowed),
+		// double slashes, normalize . and .. components, and remove the trailing slash
+		sep := string(os.PathSeparator)
+		ann = filepath.Clean(ann)
+		ann = strings.TrimPrefix(ann, sep)
+		ann = strings.TrimSuffix(ann, sep)
+		if (ann == ".") || (ann == "") {
+			// If the path is an "empty" path, use the PVC name alone
+			hostPath = options.PVC.Name
+		} else {
+			// If the path is not an "empty" path, use the given path, and the PVC name as the leaf folder
+			hostPath = ann + sep + options.PVC.Name
+		}
 	}
 	path := path.Join(p.pvDir, hostPath)
+	volumeName := options.PVName
 
+	fmt.Printf("Provisioning volume %s from PVC %s/%s at path [%s]\n", volumeName, options.PVC.Namespace, options.PVC.Name, path)
 	if err := os.MkdirAll(path, 0777); err != nil {
+		fmt.Printf("\tProvisioning failed: %s\n", err)
 		return nil, controller.ProvisioningFinished, err
 	}
 
 	pv := &v1.PersistentVolume{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: options.PVName,
+			Name: volumeName,
 			Annotations: map[string]string{
 				"hostPathProvisionerIdentity": p.identity,
 			},
@@ -120,7 +139,8 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 }
 
 // Delete removes the storage asset that was created by Provision represented
-// by the given PV. The path is read directly from the PV object
+// by the given PV. The path is read directly from the PV object, to more transparently
+// support the use of the hostPathAnnotation
 func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentVolume) error {
 	ann, ok := volume.Annotations["hostPathProvisionerIdentity"]
 	if !ok {
@@ -130,7 +150,10 @@ func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 		return &controller.IgnoredError{Reason: "identity annotation on PV does not match ours"}
 	}
 
-	if err := os.RemoveAll(volume.Spec.PersistentVolumeSource.HostPath.Path); err != nil {
+	path := volume.Spec.PersistentVolumeSource.HostPath.Path
+	fmt.Printf("Removing the contents for volume %s at path [%s]\n", volume.Name, path)
+	if err := os.RemoveAll(path); err != nil {
+		fmt.Printf("\tFailed to remove the contents: %s\n", err)
 		return err
 	}
 
