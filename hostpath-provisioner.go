@@ -86,8 +86,7 @@ func (p *hostPathProvisioner) Provision(ctx context.Context, options controller.
 
 	// Allow the use of an annotation to request a specific location within the
 	// directory hierarchy.
-	ann, ok := options.PVC.Annotations[p.hostPathAnnotation]
-	if ok {
+	if ann, ok := options.PVC.Annotations[p.hostPathAnnotation]; ok {
 		hostPath = ann
 	}
 	path := path.Join(p.pvDir, hostPath)
@@ -133,8 +132,7 @@ func (p *hostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 	}
 
 	// This annotation is used to store the path where the volume was created
-	path, ok := volume.Annotations["hostPathProvisionerPath"]
-	if !ok {
+	if path, ok := volume.Annotations["hostPathProvisionerPath"]; ok {
 		// If the annotation isn't there, this may be a legacy volume so we use
 		// the default method for computing its location
 		path := path.Join(p.pvDir, volume.Name)
