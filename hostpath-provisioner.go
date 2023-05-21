@@ -188,7 +188,7 @@ func (p *HostPathProvisioner) Provision(ctx context.Context, options controller.
 	volumeName := options.PVName
 
 	klog.Infof("Provisioning volume %s from PVC %s/%s at host path [%s]", volumeName, options.PVC.Namespace, options.PVC.Name, hostPath)
-	if err := os.MkdirAll(path.Join(p.hpMount, relativePath), 0777); err != nil {
+	if err := os.MkdirAll(path.Join(p.hpMount, relativePath), 0775); err != nil {
 		klog.Fatalf("\tProvisioning failed: %s", err)
 		return nil, controller.ProvisioningFinished, err
 	}
