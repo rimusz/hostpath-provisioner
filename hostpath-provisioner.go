@@ -52,26 +52,26 @@ func GetProvisionerName() string {
 
 type HostPathProvisioner struct {
 	// The directory to create PV-backing directories in
-	pvDir string
+	PVDir string
 
 	// Identity of this hostPathProvisioner, set to node's name. Used to identify
 	// "this" provisioner's PVs.
-	identity string
+	Identity string
 
 	// The annotation name to look for within PVCs when a specific location is
 	// desired within the path tree
-	hostPathAnnotation string
+	HostPathAnnotation string
 
 	// The annotation name to look for within PVCs which contains the regex
 	// with which to parse out the PVC ID from the PVC Name
-	pvcIdPatternAnnotation string
+	PvcIdPatternAnnotation string
 
 	// The annotation name to look for within PVCs which contains the replacement
 	// string (i.e. with $1, $2, etc) in order to produce the desired PVC ID value
-	pvcIdReplaceAnnotation string
+	PvcIdReplaceAnnotation string
 
 	// The directory at which the created volumes will be accessible to the pod
-	hpMount string
+	HostPathMount string
 }
 
 // NewHostPathProvisioner creates a new hostpath provisioner
@@ -106,12 +106,12 @@ func NewHostPathProvisioner() controller.Provisioner {
 		nodeHostPathMount = "/hostPath"
 	}
 	result := HostPathProvisioner{
-		pvDir:                  nodeHostPath,
-		identity:               nodeName,
-		hostPathAnnotation:     nodeHostPathAnnotation,
-		pvcIdPatternAnnotation: nodeHostPvcIdPatternAnnotation,
-		pvcIdReplaceAnnotation: nodeHostPvcIdReplaceAnnotation,
-		hpMount:                nodeHostPathMount,
+		PVDir:                  nodeHostPath,
+		Identity:               nodeName,
+		HostPathAnnotation:     nodeHostPathAnnotation,
+		PvcIdPatternAnnotation: nodeHostPvcIdPatternAnnotation,
+		PvcIdReplaceAnnotation: nodeHostPvcIdReplaceAnnotation,
+		HostPathMount:          nodeHostPathMount,
 	}
 	yamlData, err := yaml.Marshal(result)
 	if err == nil {
@@ -131,8 +131,8 @@ func (p *HostPathProvisioner) Provision(ctx context.Context, options controller.
 	// Allow the use of an annotation to request a specific location within the
 	// directory hierarchy. If the annotation isn't present, the original behavior
 	// is preserved.
-	if customPath, ok := options.PVC.Annotations[p.hostPathAnnotation]; ok {
-		klog.Infof("Computing the host path for PVC %s/%s from the %s annotation: [%s]", options.PVC.Namespace, options.PVC.Name, p.hostPathAnnotation, customPath)
+	if customPath, ok := options.PVC.Annotations[p.HostPathAnnotation]; ok {
+		klog.Infof("Computing the host path for PVC %s/%s from the %s annotation: [%s]", options.PVC.Namespace, options.PVC.Name, p.HostPathAnnotation, customPath)
 
 		// The default value if the hostpath annotation value is invalid
 		relativePath = customPath
@@ -147,8 +147,8 @@ func (p *HostPathProvisioner) Provision(ctx context.Context, options controller.
 
 		// If we were given a pattern and a replacmement to parse the PVC Name to get an ID,
 		// use them ... but only use the result if it's a non-empty string
-		pvcIdPattern, patternOk := options.PVC.Annotations[p.pvcIdPatternAnnotation]
-		pvcIdReplace, replaceOk := options.PVC.Annotations[p.pvcIdReplaceAnnotation]
+		pvcIdPattern, patternOk := options.PVC.Annotations[p.PvcIdPatternAnnotation]
+		pvcIdReplace, replaceOk := options.PVC.Annotations[p.PvcIdReplaceAnnotation]
 		if patternOk && replaceOk {
 			klog.Infof("\tpvcId Pattern: [%s]", pvcIdPattern)
 			klog.Infof("\tpvcId Replace: [%s]", pvcIdReplace)
@@ -165,10 +165,10 @@ func (p *HostPathProvisioner) Provision(ctx context.Context, options controller.
 			}
 		} else {
 			if !patternOk {
-				klog.Infof("No %s annotation for PVC %s/%s, can't apply regex transformation", p.pvcIdPatternAnnotation, options.PVC.Namespace, options.PVC.Name)
+				klog.Infof("No %s annotation for PVC %s/%s, can't apply regex transformation", p.PvcIdPatternAnnotation, options.PVC.Namespace, options.PVC.Name)
 			}
 			if !replaceOk {
-				klog.Infof("No %s annotation for PVC %s/%s, can't apply regex transformation", p.pvcIdReplaceAnnotation, options.PVC.Namespace, options.PVC.Name)
+				klog.Infof("No %s annotation for PVC %s/%s, can't apply regex transformation", p.PvcIdReplaceAnnotation, options.PVC.Namespace, options.PVC.Name)
 			}
 		}
 
@@ -182,13 +182,13 @@ func (p *HostPathProvisioner) Provision(ctx context.Context, options controller.
 			relativePath = customPath
 		}
 	} else {
-		klog.Infof("No %s annotation for PVC %s/%s, will use the default path: [%s]", p.hostPathAnnotation, options.PVC.Namespace, options.PVC.Name, relativePath)
+		klog.Infof("No %s annotation for PVC %s/%s, will use the default path: [%s]", p.HostPathAnnotation, options.PVC.Namespace, options.PVC.Name, relativePath)
 	}
-	hostPath := path.Join(p.pvDir, relativePath)
+	hostPath := path.Join(p.PVDir, relativePath)
 	volumeName := options.PVName
 
 	klog.Infof("Provisioning volume %s from PVC %s/%s at host path [%s]", volumeName, options.PVC.Namespace, options.PVC.Name, hostPath)
-	if err := os.MkdirAll(path.Join(p.hpMount, relativePath), 0775); err != nil {
+	if err := os.MkdirAll(path.Join(p.HostPathMount, relativePath), 0775); err != nil {
 		klog.Fatalf("\tProvisioning failed: %s", err)
 		return nil, controller.ProvisioningFinished, err
 	}
@@ -198,7 +198,7 @@ func (p *HostPathProvisioner) Provision(ctx context.Context, options controller.
 		ObjectMeta: metav1.ObjectMeta{
 			Name: volumeName,
 			Annotations: map[string]string{
-				provisionerIdentityAnnotation: p.identity,
+				provisionerIdentityAnnotation: p.Identity,
 			},
 		},
 		Spec: v1.PersistentVolumeSpec{
@@ -227,18 +227,18 @@ func (p *HostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 	if !ok {
 		return errors.New("identity annotation not found on PV")
 	}
-	if ann != p.identity {
+	if ann != p.Identity {
 		return &controller.IgnoredError{Reason: "identity annotation on PV does not match ours"}
 	}
 
 	hostPath := volume.Spec.PersistentVolumeSource.HostPath.Path
 	klog.Infof("Removing the contents for volume %s at host path [%s]", volume.Name, hostPath)
-	relPath, err := filepath.Rel(p.pvDir, hostPath)
+	relPath, err := filepath.Rel(p.PVDir, hostPath)
 	if err != nil {
 		klog.Fatalf("\tFailed to relativize the host path: %s", err)
 		return err
 	}
-	if err := os.RemoveAll(path.Join(p.hpMount, relPath)); err != nil {
+	if err := os.RemoveAll(path.Join(p.HostPathMount, relPath)); err != nil {
 		klog.Fatalf("\tFailed to remove the contents: %s", err)
 		return err
 	}
