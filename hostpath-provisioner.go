@@ -281,18 +281,21 @@ func (p *HostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 		}
 
 		// Do the rename thing ... this will yield a unique name
-		if err := os.Rename(fullPath, fullDeletePath); err != nil {
-			klog.Fatalf("\tFailed to rename the path [%s] to [%s]", fullPath, fullDeletePath)
+		if err := os.Rename(fullPath, fullDeletePath); err == nil {
+			klog.Infof("\tRenamed the path [%s] to [%s] for race protection", fullPath, fullDeletePath)
+		} else {
+			klog.Fatalf("\tFailed to rename the path [%s] to [%s]: %s", fullPath, fullDeletePath, err)
 			// The rename failed, so just nuke the original path ... :(
 			fullDeletePath = fullPath
 		}
 	}
 
+	klog.Infof("\tDeleting [%s] recursively...", fullDeletePath)
 	if err := os.RemoveAll(fullDeletePath); err != nil {
 		klog.Fatalf("\tFailed to remove the contents: %s", err)
 		return err
 	}
-
+	klog.Infof("\tDeletion complete!")
 	return nil
 }
 
