@@ -2,7 +2,7 @@ ARG BUILDER_IMAGE="golang"
 ARG BUILDER_VER="1.20.4-alpine3.18"
 ARG ARCH="amd64"
 ARG OS="linux"
-ARG VER="0.3.0"
+ARG VER="0.4.0"
 
 FROM "${BUILDER_IMAGE}:${BUILDER_VER}" AS builder
 
