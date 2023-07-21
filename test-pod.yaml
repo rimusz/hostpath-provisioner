@@ -5,7 +5,7 @@ metadata:
 spec:
   containers:
     - name: hostpath-provisioner
-      image: public.ecr.aws/arkcase/hostpath-provisioner:0.3.0
+      image: public.ecr.aws/arkcase/hostpath-provisioner:0.4.0
       env:
         - name: NODE_NAME
           value: "hostpath-provisioner-test"
