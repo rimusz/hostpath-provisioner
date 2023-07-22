@@ -1,7 +1,7 @@
 #
 IMAGE?=public.ecr.aws/arkcase/hostpath-provisioner
 
-TAG_GIT=$(IMAGE):0.4.0
+TAG_GIT=$(IMAGE):0.4.1
 TAG_LATEST=$(IMAGE):latest
 
 PHONY: test-image

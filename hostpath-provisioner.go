@@ -232,10 +232,6 @@ func (p *HostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 		return &controller.IgnoredError{Reason: "identity annotation on PV does not match ours"}
 	}
 
-	// Handle the contingency that the path may already have
-	// been deleted, and said deletion was interrupted, so
-	// the deletion request was sent again by K8s ...
-
 	hostPath := volume.Spec.PersistentVolumeSource.HostPath.Path
 	klog.Infof("Removing the contents for volume %s at host path [%s]", volume.Name, hostPath)
 	relPath, err := filepath.Rel(p.PVDir, hostPath)
@@ -244,49 +240,63 @@ func (p *HostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 		return err
 	}
 
-	// First, rename the target path to the new "temporary-deletion" path
-	// so we can delete it without fear of collision with any new volumes that
-	// may be created which match this original volume's location (i.e. defend
-	// against the delete-create/create-delete race).
-	//
-	// i.e.: .../${volumeLeafFolder} -> .../.deleted.${volumeLeafFolder}.${volume.UID}
-	//
-	// THEN fire off the deletion of the new, unique path so it can happen
-	// at any time.
-	//
-	// Possibly add to the constructor the launching of a background task
-	// finding all pending deletions in our root directory, and deleting them
-	// in a background thread (if they're not already being deleted)
-	//
-	// This is only necessary for custom schemes that risk name collisions. However,
-	// applying this algorithm universally makes it simpler to run the background
-	// cleanup task to remove all pending volume data (does K8s already track this
-	// pending cleanup and fire off the volume deletion again if needed?)
 	fullPath := path.Join(p.HostPathMount, relPath)
-	parentPath := path.Dir(fullPath)
-	leafName := path.Base(fullPath)
-	deleteLeafName := fmt.Sprintf(".deleted.%s.%s", leafName, volume.UID)
-	fullDeletePath := path.Join(parentPath, deleteLeafName)
+	fullDeletePath := fullPath
 
-	// If the delete path already exists, then just continue deleting
-	if _, err := os.Stat(fullDeletePath); err == nil {
-		// The delete path already exists, so no rename needed
-		klog.Warningf("\tResuming interrupted deletion of [%s]", fullDeletePath)
-	} else {
-		// Does the volume path exist?
-		if _, err := os.Stat(fullPath); err != nil {
-			// the volume's path doesn't exist, so don't delete anything
-			klog.Infof("\tThe volume path [%s] no longer exists, skipping the deletion", fullPath)
-			return nil
-		}
+	volumeId := string(volume.UID)
 
-		// Do the rename thing ... this will yield a unique name
-		if err := os.Rename(fullPath, fullDeletePath); err == nil {
-			klog.Infof("\tRenamed the path [%s] to [%s] for race protection", fullPath, fullDeletePath)
+	// If the path already contains the volume UID, then it's already unique
+	// and in no danger of racing...
+	if !strings.Contains(fullPath, volumeId) {
+		// First, rename the target path to the new "temporary-deletion" path
+		// so we can delete it without fear of collision with any new volumes that
+		// may be created which match this original volume's location (i.e. defend
+		// against the delete-create/create-delete race).
+		//
+		// i.e.: .../${volumeLeafFolder} -> .../.deleted.${volumeLeafFolder}.${volume.UID}
+		//
+		// THEN fire off the deletion of the new, unique path so it can happen
+		// at any time.
+		//
+		// Possibly add to the constructor the launching of a background task
+		// finding all pending deletions in our root directory, and deleting them
+		// in a background thread (if they're not already being deleted)
+		//
+		// This is only necessary for custom schemes that risk name collisions. However,
+		// applying this algorithm universally makes it simpler to run the background
+		// cleanup task to remove all pending volume data (does K8s already track this
+		// pending cleanup and fire off the volume deletion again if needed?)
+		//
+		// Also handle the contingency that the path may already have been deleted,
+		// and said deletion was interrupted, so the deletion request was sent again
+		// by K8s ...
+
+		parentPath := path.Dir(fullPath)
+		leafName := path.Base(fullPath)
+		deleteLeafName := fmt.Sprintf(".deleted.%s.%s", leafName, volumeId)
+		fullDeletePath = path.Join(parentPath, deleteLeafName)
+
+		// If the delete path already exists, then just continue deleting
+		if _, err := os.Stat(fullDeletePath); err == nil {
+			// The delete path already exists, so no rename needed
+			klog.Warningf("\tResuming interrupted deletion of [%s]", fullDeletePath)
 		} else {
-			klog.Fatalf("\tFailed to rename the path [%s] to [%s]: %s", fullPath, fullDeletePath, err)
-			// The rename failed, so just nuke the original path ... :(
-			fullDeletePath = fullPath
+			// Does the volume path exist?
+			if _, err := os.Stat(fullPath); err != nil {
+				// the volume's path doesn't exist, so don't delete anything
+				klog.Infof("\tThe volume path [%s] no longer exists, skipping the deletion", fullPath)
+				return nil
+			}
+
+			// Do the rename thing ... this will yield a unique name which is safe
+			// from create-delete races
+			if err := os.Rename(fullPath, fullDeletePath); err == nil {
+				klog.Infof("\tRenamed the path [%s] to [%s] for race protection", fullPath, fullDeletePath)
+			} else {
+				klog.Fatalf("\tFailed to rename the path [%s] to [%s]: %s", fullPath, fullDeletePath, err)
+				// The rename failed, so just nuke the original path ... :(
+				fullDeletePath = fullPath
+			}
 		}
 	}
 
@@ -295,7 +305,7 @@ func (p *HostPathProvisioner) Delete(ctx context.Context, volume *v1.PersistentV
 		klog.Fatalf("\tFailed to remove the contents: %s", err)
 		return err
 	}
-	klog.Infof("\tDeletion complete!")
+	klog.Infof("\tDeletion of [%s] complete!", fullDeletePath)
 	return nil
 }
 
