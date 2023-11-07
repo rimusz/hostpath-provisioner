@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hostpath-provisioner-test
+spec:
+  containers:
+    - name: hostpath-provisioner
+      image: public.ecr.aws/arkcase/hostpath-provisioner:0.4.1
+      env:
+        - name: NODE_NAME
+          value: "hostpath-provisioner-test"
